@@ -42,7 +42,7 @@ impl Question {
 
 fn main() {
     let question = Question::new(
-        QuestionId("1".to_string()),
+        QuestionId::from_str("1").expect("No id provided"),
         "What is Rust?".to_string(),
         "Rust is a systems programming language.".to_string(),
         Some(vec!["rust".to_string(), "programming".to_string()]),
