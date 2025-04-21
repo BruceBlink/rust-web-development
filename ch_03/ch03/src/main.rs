@@ -2,8 +2,9 @@ use std::io::{Error, ErrorKind};
 use std::str::FromStr;
 
 use warp::Filter;
+use serde::Serialize;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 struct Question {
     id: QuestionId,
     title: String,
@@ -11,7 +12,7 @@ struct Question {
     tags: Option<Vec<String>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 struct QuestionId(String);
 
 impl FromStr for QuestionId {
@@ -53,7 +54,6 @@ async fn get_question() -> Result<impl warp::Reply, warp::Rejection> {
     Ok(warp::reply::json(
         &question
     ))
-    //Ok(())
 }
 
 
@@ -62,7 +62,7 @@ async fn main() {
     let get_items = warp::get()
         .and(warp::path("question"))
         .and(warp::path::end())
-        .and_then(get_question());
+        .and_then(get_question);  // 注意这里传入的是一个函数名而不是一个函数调用，
     let routes = get_items;
 
     warp::serve(routes)

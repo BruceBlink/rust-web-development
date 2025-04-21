@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 tokio = { version = "1.0.0", features = ["rt", "rt-multi-thread", "macros"] }
 warp = "0.3.7"
+serde = { version = "1.0.219", features = ["derive"] }
