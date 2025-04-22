@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 use serde::Serialize;
 use warp::{Filter, Rejection, Reply};
+use warp::cors::CorsForbidden;
 use warp::http::Method;
 use warp::hyper::StatusCode;
 use warp::reject::Reject;
@@ -73,14 +74,19 @@ struct InvalidId;
 impl Reject for InvalidId {}
 
 async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
-    if let Some(_invalid_id) = r.find::<InvalidId>() {
+    if let Some(error) = r.find::<CorsForbidden>() {
         Ok(warp::reply::with_status(
-            "No valid ID presented",
+            error.to_string(),
+            StatusCode::FORBIDDEN,
+        ))
+    } else if let Some(_invalid_id) = r.find::<InvalidId>() {
+        Ok(warp::reply::with_status(
+            "No valid ID presented".to_string(),
             StatusCode::UNPROCESSABLE_ENTITY,
         ))
     } else {
         Ok(warp::reply::with_status(
-            "Route not found",
+            "Route not found".to_string(),
             StatusCode::NOT_FOUND,
         ))
     }
@@ -92,7 +98,7 @@ async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
 async fn main() {
     let cors = warp::cors()
         .allow_any_origin()
-        .allow_header("content-type")
+        .allow_header("not-in-the-request")
         .allow_methods(
             &[Method::PUT, Method::DELETE, Method::GET, Method::POST]
         );
