@@ -78,18 +78,16 @@ struct InvalidId;
 impl Reject for InvalidId {}
 
 async fn get_questions(params: HashMap<String, String>,store: Store) -> Result<impl warp::Reply, warp::Rejection> {
-    //println!("{:?}", params);
-    /*match params.get("start") {
-        Some(start) => println!("{}", start),
-        None => println!("No start value"),
-    }*/
-    let mut start = 0;
-    if let Some(n) = params.get("start") {
-        start = n.parse::<usize>().expect("Could not parse start");
+
+    if !params.is_empty() {
+        let pagination = extract_pagination(params)?;
+        let res: Vec<Question> = store.questions.values().cloned().collect();
+        let res = &res[pagination.start..pagination.end];
+        Ok(warp::reply::json(&res))
+    }else {
+        let res: Vec<Question> = store.questions.values().cloned().collect();
+        Ok(warp::reply::json(&res))
     }
-    println!("{}", start);
-    let res: Vec<Question> = store.questions.values().cloned().collect();
-    Ok(warp::reply::json(&res))
 }
 
 async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
