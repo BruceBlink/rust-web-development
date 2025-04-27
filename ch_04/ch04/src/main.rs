@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::io::{Error, ErrorKind};
+use std::fmt::{Display, Formatter};
+use std::io::ErrorKind;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
@@ -12,6 +13,7 @@ use warp::{
     Rejection,
     Reply,
 };
+use warp::path::param;
 
 #[derive(Clone)]
 struct Store {
@@ -64,7 +66,7 @@ impl FromStr for QuestionId {
     fn from_str(id: &str) -> Result<Self, Self::Err> {
         match id.is_empty() {
             false => Ok(QuestionId(id.to_string())),
-            true => Err(Error::new(ErrorKind::InvalidInput, "No id provided")),
+            true => Err(std::io::Error::new(ErrorKind::InvalidInput, "No id provided")),
         }
     }
 }
@@ -103,6 +105,42 @@ async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
         ))
     }
 }
+
+#[derive(Debug)]
+enum Error {
+    ParseError(std::num::ParseIntError),
+    MissingParameters,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Error::ParseError(ref err) => {
+                write!(f, "Cannot parse parameter: {}", err)
+            },
+            Error::MissingParameters => write!(f, "Missing parameter")
+        }
+    }
+}
+
+impl Reject for Error {}
+
+#[derive(Debug)]
+struct Pagination {
+    start: usize,
+    end: usize,
+}
+
+fn extract_pagination(params: HashMap<String, String>) -> Result<Pagination, Error> {
+    if params.contains_key("start") && params.contains_key("end") {
+        return Ok(Pagination {
+            start: params.get("start").unwrap().parse::<usize>().map_err(Error::ParseError)?,
+            end: params.get("end").unwrap().parse::<usize>().map_err(Error::ParseError)?,
+        });
+    }
+    Err(Error::MissingParameters)
+}
+
 
 
 #[tokio::main]
