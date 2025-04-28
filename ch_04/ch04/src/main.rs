@@ -2,9 +2,11 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::io::ErrorKind;
 use std::str::FromStr;
-use std::cmp; // 引入 cmp 用于 min/max
+use std::cmp;
+use std::sync::Arc; // 引入 cmp 用于 min/max
 
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 use warp::{
     Filter,
     filters::cors::CorsForbidden,
@@ -18,13 +20,13 @@ use warp::{
 
 #[derive(Clone)]
 struct Store {
-    questions: HashMap<QuestionId, Question>,
+    questions: Arc<RwLock<HashMap<QuestionId, Question>>>,
 }
 
 impl Store {
     fn new() -> Self {
         Store {
-            questions: Self::init(),
+            questions: Arc::new(RwLock::new(Self::init()))
         }
     }
 
@@ -83,7 +85,7 @@ async fn get_questions(params: HashMap<String, String>,store: Store) -> Result<i
 
     if params.is_empty() {
         // 没有查询参数，返回所有问题
-        let res: Vec<Question> = store.questions.values().cloned().collect();
+        let res: Vec<Question> = store.questions.read().await.values().cloned().collect();
         Ok(warp::reply::json(&res))
     } else {
         // 有查询参数，尝试提取分页信息
