@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::io::ErrorKind;
 use std::str::FromStr;
+use std::cmp; // 引入 cmp 用于 min/max
 
 use serde::{Deserialize, Serialize};
 use warp::{
@@ -9,11 +10,11 @@ use warp::{
     filters::cors::CorsForbidden,
     http::Method,
     http::StatusCode,
-    reject::Reject,
+    reject::Reject, // 移除未使用的 InvalidId 后，这里可能不再需要显式引入 Reject，但保留也无妨
     Rejection,
     Reply,
 };
-use warp::path::param;
+// warp::path::param; // 这个 import 没有被使用，可以移除
 
 #[derive(Clone)]
 struct Store {
@@ -28,14 +29,17 @@ impl Store {
     }
 
     fn init() -> HashMap<QuestionId, Question> {
-        let file = include_str!("../question.json");
+        // 确保 questions.json 文件在编译时相对于 src/main.rs (或其他源文件) 的路径是正确的
+        // 例如，如果 main.rs 在 src/ 下，questions.json 应该在项目根目录
+        let file = include_str!("../question.json"); // 假设文件在项目根目录
         serde_json::from_str(file).expect("can't read questions.json")
     }
 
-    fn add_question(mut self, question: Question) -> Self {
-        self.questions.insert(question.id.clone(), question);
-        self
-    }
+    // 这个方法在原始代码中没有被调用，如果需要添加问题的功能，可以取消注释
+    // fn add_question(mut self, question: Question) -> Self {
+    //     self.questions.insert(question.id.clone(), question);
+    //     self
+    // }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -49,62 +53,90 @@ struct Question {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 struct QuestionId(String);
 
-impl Question {
-    fn new(id: QuestionId, title: String, content: String, tags: Option<Vec<String>>) -> Self {
-        Question {
-            id,
-            title,
-            content,
-            tags,
-        }
-    }
-}
+// 这个 new 方法在原始代码中没有被调用，可以保留或移除
+// impl Question {
+//     fn new(id: QuestionId, title: String, content: String, tags: Option<Vec<String>>) -> Self {
+//         Question {
+//             id,
+//             title,
+//             content,
+//             tags,
+//         }
+//     }
+// }
 
 impl FromStr for QuestionId {
     type Err = std::io::Error;
 
     fn from_str(id: &str) -> Result<Self, Self::Err> {
-        match id.is_empty() {
-            false => Ok(QuestionId(id.to_string())),
-            true => Err(std::io::Error::new(ErrorKind::InvalidInput, "No id provided")),
+        if id.is_empty() {
+            Err(std::io::Error::new(ErrorKind::InvalidInput, "No id provided"))
+        } else {
+            Ok(QuestionId(id.to_string()))
         }
     }
 }
 
-
-#[derive(Debug)]
-struct InvalidId;
-
-impl Reject for InvalidId {}
+// 移除了未使用的 InvalidId struct 和 impl Reject for InvalidId
 
 async fn get_questions(params: HashMap<String, String>,store: Store) -> Result<impl warp::Reply, warp::Rejection> {
 
-    if !params.is_empty() {
-        let pagination = extract_pagination(params)?;
-        let res: Vec<Question> = store.questions.values().cloned().collect();
-        let res = &res[pagination.start..pagination.end];
-        Ok(warp::reply::json(&res))
-    }else {
+    if params.is_empty() {
+        // 没有查询参数，返回所有问题
         let res: Vec<Question> = store.questions.values().cloned().collect();
         Ok(warp::reply::json(&res))
+    } else {
+        // 有查询参数，尝试提取分页信息
+        match extract_pagination(params) {
+            Ok(pagination) => {
+                let all_questions: Vec<Question> = store.questions.values().cloned().collect();
+                let total_len = all_questions.len();
+
+                // 确保 start 和 end 不会越界
+                let start = cmp::min(pagination.start, total_len);
+                let end = cmp::min(pagination.end, total_len);
+
+                // 确保 start <= end，如果 start > end，返回空结果
+                if start >= end {
+                    let empty_questions: Vec<Question> = Vec::new();
+                    Ok(warp::reply::json(&empty_questions))
+                } else {
+                    // 安全地进行切片
+                    let paginated_questions = &all_questions[start..end];
+                    Ok(warp::reply::json(&paginated_questions))
+                }
+            },
+            Err(e) => {
+                // 如果提取分页参数失败，返回一个 Rejection
+                Err(warp::reject::custom(e))
+            }
+        }
     }
 }
 
 async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
     if let Some(error) = r.find::<Error>() {
+        // 对客户端参数错误使用 BAD_REQUEST (400)
         Ok(warp::reply::with_status(
             error.to_string(),
-            StatusCode::RANGE_NOT_SATISFIABLE
+            StatusCode::BAD_REQUEST // <--- 修改点
         ))
-    }else if let Some(error) = r.find::<CorsForbidden>() {
+    } else if let Some(cors_error) = r.find::<CorsForbidden>() {
         Ok(warp::reply::with_status(
-            error.to_string(),
+            cors_error.to_string(),
             StatusCode::FORBIDDEN,
         ))
-    } else {
+    } else if r.is_not_found() { // 使用 is_not_found() 更明确
         Ok(warp::reply::with_status(
             "Route not found".to_string(),
             StatusCode::NOT_FOUND,
+        ))
+    } else {
+        // 处理其他未预期的 rejection
+        eprintln!("Unhandled rejection: {:?}", r); // 最好记录下未处理的错误
+        Ok(warp::reply::with_status(
+            "Internal Server Error".to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
         ))
     }
 }
@@ -113,6 +145,7 @@ async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
 enum Error {
     ParseError(std::num::ParseIntError),
     MissingParameters,
+    InvalidRange, // 可以添加一个错误类型表示 start >= end
 }
 
 impl Display for Error {
@@ -121,11 +154,13 @@ impl Display for Error {
             Error::ParseError(ref err) => {
                 write!(f, "Cannot parse parameter: {}", err)
             },
-            Error::MissingParameters => write!(f, "Missing parameter")
+            Error::MissingParameters => write!(f, "Missing 'start' or 'end' parameter"), // 消息更清晰
+            Error::InvalidRange => write!(f, "'start' must be less than 'end'"),
         }
     }
 }
 
+// 让自定义 Error 可以被 warp 作为 rejection 处理
 impl Reject for Error {}
 
 #[derive(Debug)]
@@ -135,36 +170,55 @@ struct Pagination {
 }
 
 fn extract_pagination(params: HashMap<String, String>) -> Result<Pagination, Error> {
-    if params.contains_key("start") && params.contains_key("end") {
-        return Ok(Pagination {
-            start: params.get("start").unwrap().parse::<usize>().map_err(Error::ParseError)?,
-            end: params.get("end").unwrap().parse::<usize>().map_err(Error::ParseError)?,
-        });
-    }
-    Err(Error::MissingParameters)
+    // 同时获取 start 和 end 参数
+    let start_str = params.get("start").ok_or(Error::MissingParameters)?;
+    let end_str = params.get("end").ok_or(Error::MissingParameters)?;
+
+    // 解析参数
+    let start = start_str.parse::<usize>().map_err(Error::ParseError)?;
+    let end = end_str.parse::<usize>().map_err(Error::ParseError)?;
+
+    // （可选）可以在这里就检查 start < end
+    // if start >= end {
+    //     return Err(Error::InvalidRange);
+    // }
+
+    Ok(Pagination { start, end })
 }
 
 
 
 #[tokio::main]
 async fn main() {
+    // 准备一个示例 questions.json 文件在项目根目录
+    // 例如：
+    // {
+    //   "q1": { "id": "q1", "title": "First Question", "content": "Content of Q1", "tags": ["rust"] },
+    //   "q2": { "id": "q2", "title": "Second Question", "content": "Content of Q2", "tags": ["web"] },
+    //   "q3": { "id": "q3", "title": "Third Question", "content": "Content of Q3", "tags": ["warp"] }
+    // }
     let store = Store::new();
     let store_filter = warp::any().map(move || store.clone());
+
     let cors = warp::cors()
         .allow_any_origin()
         .allow_header("content-type")
-        .allow_methods(&[Method::PUT, Method::DELETE, Method::GET, Method::POST]);
+        .allow_methods(&[Method::PUT, Method::DELETE, Method::GET, Method::POST]); // GET 通常也需要允许
 
     let get_questions = warp::get()
         .and(warp::path("questions"))
         .and(warp::path::end())
-        .and(warp::query())
-        .and(store_filter)
-        .and_then(get_questions)
-        .recover(return_error);
+        .and(warp::query()) // 提取查询参数 HashMap<String, String>
+        .and(store_filter.clone()) // 注入 store
+        .and_then(get_questions); // 调用处理函数
 
-    let routes = get_questions.with(cors);
+    // 注意：recover 需要放在应用 CORS *之前* 或 *之后*，取决于你想如何处理 CORS 错误
+    // 通常放在应用 CORS 之后，这样 CORS 错误（如 CorsForbidden）也能被 return_error 捕获
+    let routes = get_questions
+        .recover(return_error) // 捕获 get_questions 内部或 filter 链产生的 Rejection
+        .with(cors); // 应用 CORS 策略
 
+    println!("Server starting on http://127.0.0.1:3030");
     warp::serve(routes)
         .run(([127, 0, 0, 1], 3030))
         .await;
