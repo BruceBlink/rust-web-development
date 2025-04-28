@@ -91,7 +91,7 @@ async fn get_questions(params: HashMap<String, String>,store: Store) -> Result<i
         // 有查询参数，尝试提取分页信息
         match extract_pagination(params) {
             Ok(pagination) => {
-                let all_questions: Vec<Question> = store.questions.values().cloned().collect();
+                let all_questions: Vec<Question> = store.questions.read().await.values().cloned().collect();
                 let total_len = all_questions.len();
 
                 // 确保 start 和 end 不会越界
