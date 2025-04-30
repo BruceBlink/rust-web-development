@@ -188,7 +188,14 @@ fn extract_pagination(params: HashMap<String, String>) -> Result<Pagination, Err
     Ok(Pagination { start, end })
 }
 
-
+async fn add_question(store: Store,
+                      question: Question) -> Result<impl Reply, Rejection> {
+    store.questions.write().await.insert(question.id.clone(), question);
+    Ok(warp::reply::with_status(
+        "Question added",
+        StatusCode::OK,
+    ))
+}
 
 #[tokio::main]
 async fn main() {
@@ -214,9 +221,17 @@ async fn main() {
         .and(store_filter.clone()) // 注入 store
         .and_then(get_questions); // 调用处理函数
 
+    let add_question = warp::post()
+        .and(warp::path("questions"))
+        .and(warp::path::end())
+        .and(store_filter.clone())
+        .and(warp::body::json())
+        .and_then(add_question);
+
     // 注意：recover 需要放在应用 CORS *之前* 或 *之后*，取决于你想如何处理 CORS 错误
     // 通常放在应用 CORS 之后，这样 CORS 错误（如 CorsForbidden）也能被 return_error 捕获
     let routes = get_questions
+        .or(add_question)
         .recover(return_error) // 捕获 get_questions 内部或 filter 链产生的 Rejection
         .with(cors); // 应用 CORS 策略
 
