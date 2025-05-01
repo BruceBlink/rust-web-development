@@ -15,6 +15,7 @@ use warp::{
     reject::Reject, // 移除未使用的 InvalidId 后，这里可能不再需要显式引入 Reject，但保留也无妨
     Rejection,
     Reply,
+    body::BodyDeserializeError,
 };
 // warp::path::param; // 这个 import 没有被使用，可以移除
 
@@ -128,6 +129,11 @@ async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
             cors_error.to_string(),
             StatusCode::FORBIDDEN,
         ))
+    } else if let Some (error) = r.find::<BodyDeserializeError>(){
+      Ok(warp::reply::with_status(
+          error.to_string(),
+          StatusCode::UNPROCESSABLE_ENTITY,
+      ))
     } else if r.is_not_found() { // 使用 is_not_found() 更明确
         Ok(warp::reply::with_status(
             "Route not found".to_string(),
