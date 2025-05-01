@@ -199,6 +199,19 @@ async fn add_question(store: Store,
     ))
 }
 
+async fn update_question(id: String,
+                         store: Store,   
+                         question: Question) -> Result<impl Reply, Rejection> {
+    match store.questions.write().await.get_mut(&QuestionId(id)) {
+        Some(q) => *q = question,
+        None => return Err(warp::reject::custom(Error::QuestionNotFound)),
+    }
+    Ok(warp::reply::with_status(
+        "Question updated",
+        StatusCode::OK,
+    ))
+}   
+
 #[tokio::main]
 async fn main() {
     // 准备一个示例 questions.json 文件在项目根目录
