@@ -243,10 +243,18 @@ async fn main() {
         .and(warp::body::json())
         .and_then(add_question);
 
+    let update_question = warp::put()
+        .and(warp::path("questions"))
+        .and(warp::path::param::<String>())
+        .and(warp::path::end())
+        .and(store_filter.clone())
+        .and(warp::body::json())
+        .and_then(update_question);
     // 注意：recover 需要放在应用 CORS *之前* 或 *之后*，取决于你想如何处理 CORS 错误
     // 通常放在应用 CORS 之后，这样 CORS 错误（如 CorsForbidden）也能被 return_error 捕获
     let routes = get_questions
         .or(add_question)
+        .or(update_question)
         .recover(return_error) // 捕获 get_questions 内部或 filter 链产生的 Rejection
         .with(cors); // 应用 CORS 策略
 
