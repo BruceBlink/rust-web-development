@@ -216,7 +216,22 @@ async fn update_question(id: String,
         "Question updated",
         StatusCode::OK,
     ))
-}   
+}
+
+async fn delete_question(id: String,
+                         store: Store) -> Result<impl Reply, Rejection> {
+    match store.questions.write().await.remove(&QuestionId(id)) {
+        Some(_) => {
+           return Ok(
+                warp::reply::with_status(
+                    "Question deleted",
+                    StatusCode::OK,
+                )
+            )
+        },
+        None => Err(warp::reject::custom(Error::QuestionNotFound))
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -256,11 +271,19 @@ async fn main() {
         .and(store_filter.clone())
         .and(warp::body::json())
         .and_then(update_question);
+
+    let delete_question = warp::delete()
+        .and(warp::path("questions"))
+        .and(warp::path::param::<String>())
+        .and(warp::path::end())
+        .and(store_filter.clone())
+        .and_then(delete_question);
     // 注意：recover 需要放在应用 CORS *之前* 或 *之后*，取决于你想如何处理 CORS 错误
     // 通常放在应用 CORS 之后，这样 CORS 错误（如 CorsForbidden）也能被 return_error 捕获
     let routes = get_questions
         .or(add_question)
         .or(update_question)
+        .or(delete_question)
         .recover(return_error) // 捕获 get_questions 内部或 filter 链产生的 Rejection
         .with(cors); // 应用 CORS 策略
 
