@@ -148,6 +148,7 @@ enum Error {
     ParseError(std::num::ParseIntError),
     MissingParameters,
     InvalidRange, // 可以添加一个错误类型表示 start >= end
+    QuestionNotFound,
 }
 
 impl Display for Error {
@@ -158,6 +159,7 @@ impl Display for Error {
             },
             Error::MissingParameters => write!(f, "Missing 'start' or 'end' parameter"), // 消息更清晰
             Error::InvalidRange => write!(f, "'start' must be less than 'end'"),
+            Error::QuestionNotFound => write!(f, "question not found"),
         }
     }
 }
