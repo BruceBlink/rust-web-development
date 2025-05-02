@@ -129,61 +129,73 @@ async fn get_questions(params: HashMap<String, String>,store: Store) -> Result<i
     }
 }
 
-async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
-    if let Some(error) = r.find::<Error>() {
-        // 对客户端参数错误使用 BAD_REQUEST (400)
-        Ok(warp::reply::with_status(
-            error.to_string(),
-            StatusCode::BAD_REQUEST // <--- 修改点
-        ))
-    } else if let Some(cors_error) = r.find::<CorsForbidden>() {
-        Ok(warp::reply::with_status(
-            cors_error.to_string(),
-            StatusCode::FORBIDDEN,
-        ))
-    } else if let Some (error) = r.find::<BodyDeserializeError>(){
-      Ok(warp::reply::with_status(
-          error.to_string(),
-          StatusCode::UNPROCESSABLE_ENTITY,
-      ))
-    } else if r.is_not_found() { // 使用 is_not_found() 更明确
-        Ok(warp::reply::with_status(
-            "Route not found".to_string(),
-            StatusCode::NOT_FOUND,
-        ))
-    } else {
-        // 处理其他未预期的 rejection
-        eprintln!("Unhandled rejection: {:?}", r); // 最好记录下未处理的错误
-        Ok(warp::reply::with_status(
-            "Internal Server Error".to_string(),
-            StatusCode::INTERNAL_SERVER_ERROR,
-        ))
+mod error {
+    use std::fmt::{Display, Formatter};
+    use warp::reject::Reject;
+    use warp::{Rejection, Reply};
+    use warp::body::BodyDeserializeError;
+    use warp::cors::CorsForbidden;
+    use warp::http::StatusCode;
+    use crate::error;
+
+    #[derive(Debug)]
+    pub enum Error {
+        ParseError(std::num::ParseIntError),
+        MissingParameters,
+        InvalidRange, // 可以添加一个错误类型表示 start >= end
+        QuestionNotFound,
     }
-}
 
-#[derive(Debug)]
-enum Error {
-    ParseError(std::num::ParseIntError),
-    MissingParameters,
-    InvalidRange, // 可以添加一个错误类型表示 start >= end
-    QuestionNotFound,
-}
+    impl Display for Error {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            match *self {
+                Error::ParseError(ref err) => {
+                    write!(f, "Cannot parse parameter: {}", err)
+                },
+                Error::MissingParameters => write!(f, "Missing 'start' or 'end' parameter"), // 消息更清晰
+                Error::InvalidRange => write!(f, "'start' must be less than 'end'"),
+                Error::QuestionNotFound => write!(f, "question not found"),
+            }
+        }
+    }
+    impl Reject for Error {}
 
-impl Display for Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            Error::ParseError(ref err) => {
-                write!(f, "Cannot parse parameter: {}", err)
-            },
-            Error::MissingParameters => write!(f, "Missing 'start' or 'end' parameter"), // 消息更清晰
-            Error::InvalidRange => write!(f, "'start' must be less than 'end'"),
-            Error::QuestionNotFound => write!(f, "question not found"),
+    pub async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
+        if let Some(error) = r.find::<Error>() {
+            // 对客户端参数错误使用 BAD_REQUEST (400)
+            Ok(warp::reply::with_status(
+                error.to_string(),
+                StatusCode::BAD_REQUEST // <--- 修改点
+            ))
+        } else if let Some(cors_error) = r.find::<CorsForbidden>() {
+            Ok(warp::reply::with_status(
+                cors_error.to_string(),
+                StatusCode::FORBIDDEN,
+            ))
+        } else if let Some (error) = r.find::<BodyDeserializeError>(){
+            Ok(warp::reply::with_status(
+                error.to_string(),
+                StatusCode::UNPROCESSABLE_ENTITY,
+            ))
+        } else if r.is_not_found() { // 使用 is_not_found() 更明确
+            Ok(warp::reply::with_status(
+                "Route not found".to_string(),
+                StatusCode::NOT_FOUND,
+            ))
+        } else {
+            // 处理其他未预期的 rejection
+            eprintln!("Unhandled rejection: {:?}", r); // 最好记录下未处理的错误
+            Ok(warp::reply::with_status(
+                "Internal Server Error".to_string(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ))
         }
     }
 }
 
+
 // 让自定义 Error 可以被 warp 作为 rejection 处理
-impl Reject for Error {}
+
 
 #[derive(Debug)]
 struct Pagination {
@@ -191,14 +203,14 @@ struct Pagination {
     end: usize,
 }
 
-fn extract_pagination(params: HashMap<String, String>) -> Result<Pagination, Error> {
+fn extract_pagination(params: HashMap<String, String>) -> Result<Pagination, error::Error> {
     // 同时获取 start 和 end 参数
-    let start_str = params.get("start").ok_or(Error::MissingParameters)?;
-    let end_str = params.get("end").ok_or(Error::MissingParameters)?;
+    let start_str = params.get("start").ok_or(error::Error::MissingParameters)?;
+    let end_str = params.get("end").ok_or(error::Error::MissingParameters)?;
 
     // 解析参数
-    let start = start_str.parse::<usize>().map_err(Error::ParseError)?;
-    let end = end_str.parse::<usize>().map_err(Error::ParseError)?;
+    let start = start_str.parse::<usize>().map_err(error::Error::ParseError)?;
+    let end = end_str.parse::<usize>().map_err(error::Error::ParseError)?;
 
     // （可选）可以在这里就检查 start < end
     // if start >= end {
@@ -222,7 +234,7 @@ async fn update_question(id: String,
                          question: Question) -> Result<impl Reply, Rejection> {
     match store.questions.write().await.get_mut(&QuestionId(id)) {
         Some(q) => *q = question,
-        None => return Err(warp::reject::custom(Error::QuestionNotFound)),
+        None => return Err(warp::reject::custom(error::Error::QuestionNotFound)),
     }
     Ok(warp::reply::with_status(
         "Question updated",
@@ -241,7 +253,7 @@ async fn delete_question(id: String,
                 )
             )
         },
-        None => Err(warp::reject::custom(Error::QuestionNotFound))
+        None => Err(warp::reject::custom(error::Error::QuestionNotFound))
     }
 }
 
@@ -318,7 +330,7 @@ async fn main() {
         .or(update_question)
         .or(delete_question)
         .or(add_answer)
-        .recover(return_error) // 捕获 get_questions 内部或 filter 链产生的 Rejection
+        .recover(error::return_error) // 捕获 get_questions 内部或 filter 链产生的 Rejection
         .with(cors); // 应用 CORS 策略
 
     println!("Server starting on http://127.0.0.1:3030");
