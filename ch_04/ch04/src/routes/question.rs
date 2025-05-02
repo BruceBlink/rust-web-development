@@ -1,13 +1,14 @@
 use std::cmp;
 use std::collections::HashMap;
+use handle_errors::Error;
 use warp::{Rejection, Reply};
 use warp::http::StatusCode;
-use crate::{error, store};
+use crate::store;
 use crate::store::Store;
 use crate::types::pagination::extract_pagination;
 use crate::types::question::{Question, QuestionId};
 
-pub async fn get_questions(params: HashMap<String, String>,store: store::Store) -> Result<impl warp::Reply, warp::Rejection> {
+pub async fn get_questions(params: HashMap<String, String>,store: store::Store) -> Result<impl Reply, Rejection> {
 
     if params.is_empty() {
         // 没有查询参数，返回所有问题
@@ -56,7 +57,7 @@ pub async fn update_question(id: String,
                          question: Question) -> Result<impl Reply, Rejection> {
     match store.questions.write().await.get_mut(&QuestionId(id)) {
         Some(q) => *q = question,
-        None => return Err(warp::reject::custom(error::Error::QuestionNotFound)),
+        None => return Err(warp::reject::custom(Error::QuestionNotFound)),
     }
     Ok(warp::reply::with_status(
         "Question updated",
@@ -75,6 +76,6 @@ pub async fn delete_question(id: String,
                 )
             )
         },
-        None => Err(warp::reject::custom(error::Error::QuestionNotFound))
+        None => Err(warp::reject::custom(Error::QuestionNotFound))
     }
 }

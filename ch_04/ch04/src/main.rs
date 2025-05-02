@@ -1,16 +1,7 @@
-use std::fmt::Display;
-use std::str::FromStr;
-
-use serde::{Deserialize, Serialize};
+use handle_errors::return_error;
 use warp::{
-    Filter
-    ,
-    http::Method
-    ,
-    reject::Reject // 移除未使用的 InvalidId 后，这里可能不再需要显式引入 Reject，但保留也无妨
-    ,
-    Reply
-    ,
+    Filter,
+    http::Method, // 移除未使用的 InvalidId 后，这里可能不再需要显式引入 Reject，但保留也无妨,
 };
 
 use crate::routes::answer::add_answer;
@@ -19,7 +10,6 @@ use crate::store::Store;
 use crate::types::answer::{Answer, AnswerId};
 use crate::types::question::{Question, QuestionId};
 
-mod error;
 mod routes;
 mod types;
 mod store;
@@ -86,7 +76,7 @@ async fn main() {
         .or(update_question)
         .or(delete_question)
         .or(add_answer)
-        .recover(error::return_error) // 捕获 get_questions 内部或 filter 链产生的 Rejection
+        .recover(return_error) // 捕获 get_questions 内部或 filter 链产生的 Rejection
         .with(cors); // 应用 CORS 策略
 
     println!("Server starting on http://127.0.0.1:3030");
