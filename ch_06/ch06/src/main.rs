@@ -25,7 +25,7 @@ async fn main() {
     //   "q3": { "id": "q3", "title": "Third Question", "content": "Content of Q3", "tags": ["warp"] }
     // }
     // 初始化日志记录器
-    env_logger::init();
+    log4rs::init_file("log4rs.yaml", Default::default()).unwrap();
     log::error!("This is an error!");
     log::info!("This is info!");
     log::warn!("This is a warning!");
@@ -84,7 +84,6 @@ async fn main() {
         .recover(return_error) // 捕获 get_questions 内部或 filter 链产生的 Rejection
         .with(cors); // 应用 CORS 策略
 
-    println!("Server starting on http://127.0.0.1:3030");
     warp::serve(routes)
         .run(([127, 0, 0, 1], 3030))
         .await;
