@@ -14,7 +14,6 @@ mod routes;
 mod types;
 mod store;
 
-// 引入 cmp 用于 min/max
 
 #[tokio::main]
 async fn main() {
@@ -25,6 +24,12 @@ async fn main() {
     //   "q2": { "id": "q2", "title": "Second Question", "content": "Content of Q2", "tags": ["web"] },
     //   "q3": { "id": "q3", "title": "Third Question", "content": "Content of Q3", "tags": ["warp"] }
     // }
+    // 初始化日志记录器
+    env_logger::init();
+    log::error!("This is an error!");
+    log::info!("This is info!");
+    log::warn!("This is a warning!");
+
     let store = Store::new();
     let store_filter = warp::any().map(move || store.clone());
 
