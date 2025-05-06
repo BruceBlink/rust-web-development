@@ -29,7 +29,16 @@ async fn main() {
     log::error!("This is an error!");
     log::info!("This is info!");
     log::warn!("This is a warning!");
-
+    let log = warp::log::custom(|info| {
+       eprintln!("{} {} {} {:?} from {} with {:?}",
+                 info.method(),
+                 info.path(),
+                 info.status(),
+                 info.elapsed(),
+                 info.remote_addr().unwrap(),
+                 info.remote_addr()
+       );
+    });
     let store = Store::new();
     let store_filter = warp::any().map(move || store.clone());
 
@@ -82,7 +91,8 @@ async fn main() {
         .or(delete_question)
         .or(add_answer)
         .recover(return_error) // 捕获 get_questions 内部或 filter 链产生的 Rejection
-        .with(cors); // 应用 CORS 策略
+        .with(cors) // 应用 CORS 策略
+        .with(log);
 
     warp::serve(routes)
         .run(([127, 0, 0, 1], 3030))
