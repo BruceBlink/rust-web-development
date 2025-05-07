@@ -8,7 +8,7 @@ use crate::store::Store;
 use crate::types::pagination::extract_pagination;
 use crate::types::question::{Question, QuestionId};
 
-pub async fn get_questions(params: HashMap<String, String>,store: store::Store) -> Result<impl Reply, Rejection> {
+pub async fn get_questions(params: HashMap<String, String>,store: store::Store, id: String,) -> Result<impl Reply, Rejection> {
     log::info!("Start querying question");
     if params.is_empty() {
         // 没有查询参数，返回所有问题
@@ -18,6 +18,7 @@ pub async fn get_questions(params: HashMap<String, String>,store: store::Store) 
         // 有查询参数，尝试提取分页信息
         match extract_pagination(params) {
             Ok(pagination) => {
+                log::info!("{} Pagination set {:?}", id, &pagination);
                 let all_questions: Vec<Question> = store.questions.read().await.values().cloned().collect();
                 let total_len = all_questions.len();
 
@@ -36,6 +37,7 @@ pub async fn get_questions(params: HashMap<String, String>,store: store::Store) 
                 }
             },
             Err(e) => {
+                log::info!("{} No Pagination used", id);
                 // 如果提取分页参数失败，返回一个 Rejection
                 Err(warp::reject::custom(e))
             }

@@ -42,6 +42,8 @@ async fn main() {
     let store = Store::new();
     let store_filter = warp::any().map(move || store.clone());
 
+    let id_filter = warp::any().map(|| uuid::Uuid::new_v4().to_string());
+
     let cors = warp::cors()
         .allow_any_origin()
         .allow_header("content-type")
@@ -52,6 +54,7 @@ async fn main() {
         .and(warp::path::end())
         .and(warp::query()) // 提取查询参数 HashMap<String, String>
         .and(store_filter.clone()) // 注入 store
+        .and(id_filter)
         .and_then(get_questions); // 调用处理函数
 
     let add_question = warp::post()
