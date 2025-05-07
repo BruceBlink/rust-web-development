@@ -30,13 +30,13 @@ async fn main() {
     log::info!("This is info!");
     log::warn!("This is a warning!");
     let log = warp::log::custom(|info| {
-       eprintln!("{} {} {} {:?} from {} with {:?}",
+       log::info!("{} {} {} {:?} from {} with {:?}",
                  info.method(),
                  info.path(),
                  info.status(),
                  info.elapsed(),
                  info.remote_addr().unwrap(),
-                 info.remote_addr()
+                 info.request_headers()
        );
     });
     let store = Store::new();

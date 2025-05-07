@@ -9,7 +9,7 @@ use crate::types::pagination::extract_pagination;
 use crate::types::question::{Question, QuestionId};
 
 pub async fn get_questions(params: HashMap<String, String>,store: store::Store) -> Result<impl Reply, Rejection> {
-
+    log::info!("Start querying question");
     if params.is_empty() {
         // 没有查询参数，返回所有问题
         let res: Vec<Question> = store.questions.read().await.values().cloned().collect();
