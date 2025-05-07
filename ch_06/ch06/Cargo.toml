@@ -13,3 +13,4 @@ handle-errors = { path = "handle-errors" }
 log = "0.4"
 # env_logger = "0.9"
 log4rs = "1.0"
+uuid = {version = "0.8", features = ["v4"]}
